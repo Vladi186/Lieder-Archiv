@@ -26,7 +26,7 @@ db = load_data()
 st.title("📚 Общий архив духовных песен")
 
 # Блок поиска
-search = st.text_input("🔍 Найти песню в архиве (введите название):")
+search = st.text_input("🔍 Найти песню в архиве:")
 if search:
     for title, content in db.items():
         if search.lower() in title.lower():
@@ -41,18 +41,39 @@ st.divider()
 
 # Блок добавления
 st.subheader("📥 Добавить новую песню")
-new_title = st.text_input("Название песни (например: Großer Gott):")
-new_text = st.text_area("Вставьте текст песни здесь (Deutsch):")
+url = st.text_input("Вставьте ссылку с evangeliums.net (необязательно):")
+manual_title = st.text_input("Название (если по ссылке не найдет):")
+manual_text = st.text_area("Текст песни (если по ссылке не найдет):")
 
 if st.button("Сохранить и перевести"):
-    if new_title and new_text:
+    final_title = ""
+    final_text = ""
+    
+    # Пытаемся взять по ссылке
+    if url:
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            res = requests.get(url, headers=headers)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            final_title = soup.find('h1').text.strip()
+            # Пробуем разные варианты поиска текста на сайте
+            content_div = soup.find('div', class_='liedtext') or soup.find('div', class_='songtext')
+            final_text = content_div.get_text(separator='\n').strip()
+        except:
+            st.error("По ссылке текст не найден. Использую ручной ввод.")
+    
+    # Если ссылка не сработала, берем ручной ввод
+    if not final_title: final_title = manual_title
+    if not final_text: final_text = manual_text
+    
+    if final_title and final_text:
         with st.spinner("Перевожу..."):
-            translated = GoogleTranslator(source='auto', target='ru').translate(new_text)
-            db[new_title] = {"original": new_text, "russian": translated}
+            translated = GoogleTranslator(source='auto', target='ru').translate(final_text)
+            db[final_title] = {"original": final_text, "russian": translated}
             save_data(db)
-            st.success(f"Песня '{new_title}' успешно добавлена!")
+            st.success(f"Песня '{final_title}' добавлена!")
             st.rerun()
     else:
-        st.warning("Пожалуйста, введите и название, и текст.")
+        st.warning("Введите хотя бы ссылку или заполните поля вручную.")
 
 st.write(f"📊 Песен в архиве: {len(db)}")
